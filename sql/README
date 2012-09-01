@@ -1,0 +1,70 @@
+Here one can find a Postgresql after insert trigger which will automatically partition the table by given interval where the trigger is activated for.
+
+The purpose of this trigger is that you have an automated mechanism which handles creating new tables for partitioning. Thus you dont have to think about manually creating new tables every year for your log entries or whatever data you have.
+The trigger will create new Tables on demand, add the same Indexes as defined on the parent and set correct primary key columns.
+
+Runtime Conditions:
+
+The following conditions must be met for the trigger to work:
+- the table which should be partitioned must have a unique costraint column named 'id'
+This is needed cause the trigger "moves" an insert from the table the trigger is activated for to the partitionend child table and thus must be able to uniquely identify the row which shall be "moved".
+With "moved" i mean inserting in the partitioned table and deleting from parent table.
+
+- Postgreql verison &gt; 8.* is needed - i'm not sure if it works on 7.*</li>
+- a timestamp column is needed which gives the 'time' when partitioning should be done
+This can be a column like:
+created timestamp default now()
+Using this column the trigger knows where the row should be moved to, thus you can also insert rows from the past and they are inserted in a previous table.</li>
+
+
+Usage:
+
+After installing the trigger function you have to do 2 things:
+1. Create the table which should be partitioned
+2. add the trigger to the table with given partitioning interval
+
+Example:
+
+Install the function results in having a new Postgresql Function called 'partitiontablebyinterval'.
+Now create a new Table, for example:
+
+-- Table: test
+-- DROP TABLE test;
+CREATE TABLE test
+(
+id bigserial NOT NULL,
+someicol integer,
+sometcol text,
+created timestamp without time zone DEFAULT now(),
+CONSTRAINT test_pkey PRIMARY KEY (id)
+)
+WITH (
+OIDS=FALSE
+);
+CREATE INDEX idx_test_i ON test (someicol);
+CREATE INDEX idx_test_t ON test (sometcol);
+
+as you see the table has also 2 index columns defined. Those 2 columns will get indexed on the partitioned tables too.
+Next is to add the Trigger after insert:
+
+
+-- Trigger: partition_test_after_trigger on test
+-- DROP TRIGGER partition_test_after_trigger ON test;
+CREATE TRIGGER partition_test_after_trigger
+AFTER INSERT
+ON test
+FOR EACH ROW
+EXECUTE PROCEDURE partitiontablebyinterval('5 seconds', 'created');
+
+In this example the Trigger creates partitionend Tables on a 5 seconds interval.
+One thing to note here is that no cronjob or such is involved. This means the trigger calculates the table which will finally get the insert by a column called 'created' in this example which is a timestamp as mentioned above.
+The calculation for this starts newly on every year!
+For example, if you want to partition by an interval of '10 months'. This would result in 2 Tables per year. The first table contains data for the months januar until including october. On the first november a new table is created until the end of the year.
+On the first januar on the next year the partitioning starts again and creates a new table which means the 2 tables from the year before contain 10 months of data and 2 months of data.
+
+So if you need to be able to partition correctly over a year boundary this trigger wont work for you.
+
+The last step is to test the trigger by inserting some columns, e.g.:
+
+INSERT INTO test (someicol, sometcol) VALUES('7','test');
+

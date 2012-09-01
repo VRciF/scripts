@@ -1,0 +1,48 @@
+this command line project can be used like:
+php5 ./index.php [CONTROLLER] [ACTION]
+OR
+./index.php [CONTROLLER] [ACTION]
+
+usage:
+for example you create a new controller ExampleController in controllers/ directory with an action like 'someAction()'
+you can call it like
+./index.php Example some
+
+
+this cli project also includes a cronjob abstraction for *nix like cronjobs
+as an example you can load the Cron Config, located at Config/Cron.php and run
+APPLICATION_CONFIG=Cron ./index.php Sample
+
+which force's to run the Sample Cronjob located at Cron/Job/Sample.php
+
+what's the purpose of this Cronjob abstraction:
+given the case you have a project which needs to execute some code via a cronjob
+one thing you can do is just write a php script and then execute the code at given time via e.g. linux's crontab
+a few weeks later you need to add a second cronjob
+each time you add a new job you have to ask the admin to get access to the server and install your script
+
+this project provides 2 helpfull purposes:
+first you add a new cronjob via a new class and a new entry in Config/crontab - then update your project on the server as normally for every php script you have
+second you have zend framework in your cronjob onboard
+
+Installation:
+add the following line to your operating system crontab
+* * * * * APPLICATION_CONFIG=Cron /path/to/zendcli/index.php
+
+this causes index.php to be executed every minute and the cronjobs in Config/crontab executed as needed
+adding a new entry in Config/crontab causes the new job to be working immediately
+
+Cronjob Usage:
+the following
+APPLICATION_CONFIG=Cron ZF_PATH=/path/to/ZendFramework/1.11.2 ./index.php Sample
+
+Environment variables:
+to switch the config you can set APPLICATION_CONFIG environment variable e.g.
+to switch from default to Cronjob config: APPLICATION_CONFIG=Cron ./index.php Sample
+
+to set the path to zend framework library use ZF_PATH environment variable like:
+ZF_PATH=/path/to/ZendFramework/1.11.2 ./index.php Example some
+
+to set both try:
+APPLICATION_CONFIG=Cron ZF_PATH=/path/to/ZendFramework/1.11.2 ./index.php Sample
+
