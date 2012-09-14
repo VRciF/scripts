@@ -8,14 +8,13 @@ usage: $0 [FSTAB] [OPTIONS]
 OPTIONS:
    -d      Script is already running in daemonized mode, thus automounterd is running in an endless loop
    -f      fstab file, DEFAULT=/etc/fstab
-   -s      sleep interval between fstab processing, only used if -d given
 EOF
 }
 
 SLEEP=60
 FILE=""
 DAEMONIZED=2
-while getopts "f:s:d" OPTION
+while getopts "f:s:" OPTION
 do
      case $OPTION in
          s)
@@ -23,9 +22,6 @@ do
              ;;
          f)
              FILE=$OPTARG
-             ;;
-         d)
-             DAEMONIZED=1
              ;;
          ?)
              usage
@@ -43,6 +39,10 @@ if [ ! -f "$FILE" ]
 then
     echo "ERROR: $FILE doesnt exist";
     exit 255
+fi
+DAEMONIZED=$(ps -o stat= -p $$)
+if [[ "$DAEMONIZED" != *"+"* ]]; then
+    DAEMONIZED=1
 fi
 
 while [ "$DAEMONIZED" -gt "0" ]; do
