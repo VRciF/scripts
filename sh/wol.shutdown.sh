@@ -2,6 +2,7 @@
 
 # automatically shutdown the server if a wol package is received and
 # the destination address equals the receiving interface address
+# uses socat to achive this
 
 while [ true ]
 do
