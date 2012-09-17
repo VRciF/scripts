@@ -60,7 +60,7 @@ while read curline; do
     TYPE=`echo ${ADDR[2]} | tr '[:upper:]' '[:lower:]'`
     OPTS=${ADDR[3]}
 
-    MCNT=$(mount | grep "${DST}" | grep -ci "${TYPE}")
+    MCNT=$(mount | grep " ${DST} " | grep -ci "${TYPE}")
 
     SHALLMOUNT=0
     SHALLUMOUNT=0
