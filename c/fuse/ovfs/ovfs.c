@@ -1,9 +1,9 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
-
-    This program can be distributed under the terms of the GNU GPL.
-    See the file COPYING.
+    This is an example overlay filesystem based on fuse
+    most parts came from 
+    an example by Miklos Szeredi
+    and mhddfs
 */
 
 #ifdef linux
