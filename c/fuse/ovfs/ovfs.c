@@ -6,10 +6,8 @@
     See the file COPYING.
 */
 
-#ifdef linux
-/* For pread()/pwrite() */
-#define _XOPEN_SOURCE 500
-#endif
+#define _XOPEN_SOURCE 600
+#define _BSD_SOURCE 1
 
 #include <fuse.h>
 #include <stdio.h>
