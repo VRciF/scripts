@@ -24,7 +24,7 @@ while [ true ]; do
         OUTKBYTES=$(($OUTKBYTES + $KBYTES))
     done < <(cat /proc/net/dev | grep -E 'eth|wlan')
 
-    if [ $CNTNONSMB -gt "0" -a $PREVINKB -ne "-1" -a $PREVOUTKB -ne "-1" ]; then
+    if [ $CNTNONSMB -le "0" -a $PREVINKB -ne "-1" -a $PREVOUTKB -ne "-1" ]; then
         DIFF=$(($INKBYTES - $PREVINKB))
         DIFF=$(($DIFF + ($OUTKBYTES - $PREVOUTKB)))
         echo "diff: $DIFF vs $LIMITKB"
