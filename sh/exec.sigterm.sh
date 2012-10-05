@@ -4,8 +4,11 @@
 
 trap "$*" SIGTERM
 
-yes > /dev/null & pid=$!
+mkfifo /tmp/sigterm.pipe.$$
+cat </tmp/sigterm.pipe.$$ > /dev/null & pid=$!
+
 wait $pid
 
-kill -SIGKILL $pid
+rm /tmp/sigterm.pipe.$$
 
+kill -SIGKILL $pid
