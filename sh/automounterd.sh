@@ -6,7 +6,6 @@ cat << EOF
 usage: $0 [FSTAB] [OPTIONS]
 
 OPTIONS:
-   -d      Script is already running in daemonized mode, thus automounterd is running in an endless loop
    -f      fstab file, DEFAULT=/etc/fstab
 EOF
 }
