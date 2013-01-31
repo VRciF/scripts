@@ -11,7 +11,7 @@ EOF
 }
 
 SLEEP=60
-FILE=""
+FILE="/etc/fstab"
 DAEMONIZED=2
 while getopts "f:s:" OPTION
 do
@@ -28,11 +28,6 @@ do
              ;;
      esac
 done
-
-if [ "${#FILE}" -eq "0" ]
-then
-    FILE="/etc/fstab"
-fi
 
 if [ ! -f "$FILE" ]
 then
