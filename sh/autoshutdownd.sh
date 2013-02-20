@@ -28,8 +28,10 @@ while [ true ]; do
     MAXKB=$(($PREVKB + $LIMITKB))
     if [ $CNTNONSMB -le "0" -a $PREVKB -gt "1" ]; then
         if [ $NOWKB -ge "$PREVKB" -a $NOWKB -le "$MAXKB" ]; then
-            shutdown -h now
-            break
+            if [ -z "$(pidof rsync)" ]; then
+                shutdown -h now
+                break
+            fi
         fi
     fi
 
