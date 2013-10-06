@@ -8,9 +8,8 @@ trap "$*" SIGTERM
 
 mkfifo /tmp/sigterm.pipe.$$
 cat </tmp/sigterm.pipe.$$ > /dev/null & pid=$!
+rm /tmp/sigterm.pipe.$$
 
 wait $pid
 
-rm /tmp/sigterm.pipe.$$
-
-kill -SIGKILL $pid 2>&1
+kill -SIGKILL $pid 2>/dev/null
