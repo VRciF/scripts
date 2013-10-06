@@ -6,6 +6,7 @@
 # $* contains the command line params as a string - so register script execution on trap
 trap "$*" SIGTERM
 
+# fifo trick from - http://mywiki.wooledge.org/SignalTrap
 mkfifo /tmp/sigterm.pipe.$$
 cat </tmp/sigterm.pipe.$$ > /dev/null & pid=$!
 rm /tmp/sigterm.pipe.$$
