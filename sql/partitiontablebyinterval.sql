@@ -23,7 +23,7 @@ DECLARE
 BEGIN
 -- check if trigger is called correctly on AFTER INSERT
     IF (TG_OP != 'INSERT' OR TG_WHEN != 'AFTER') THEN
-        RAISE EXCEPTION 'trigger ''%'' is only allowed on INSERT BEFORE statements', TG_NAME;
+        RAISE EXCEPTION 'trigger ''%'' is only allowed on INSERT AFTER statements', TG_NAME;
     END IF;
 -- check if at least the interval argument is given
     IF (TG_NARGS<1) THEN
