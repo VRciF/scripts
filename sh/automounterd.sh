@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# this script rereads a text file which has fstab-like lines
+# and tries to mount known filesystems if they aren't already mounted
+# it also unmounts the filesystem if filesystem specific tests fail
+# usage example for an entry in /etc/rc.local:
+# /root/automounterd.sh -f /root/fstab >/tmp/automounterd.log 2>&1 &
+#
+# known filesystems are: cifs, smb, smbfs, sshfs, nfs
+# the filesystems are automatically unmounted if the remote hosts are not reachable or the share is not available
+# any more e.g. via smbclient
+# whats the advantage of this script?
+# o) having this script run, one can wake up your own storage via wake up on lan
+#    if the storage is up - it gets automatically mounted
+#    if the storage shuts down - it gets automatically unmounted
+# o) one can provide your own fstab file, which allowes on the fly modifications of mount parameters
+#    between mount/umount cycles
+
 usage()
 {
 cat << EOF
