@@ -1,15 +1,23 @@
 #!/bin/bash
 
-LIMITKB=$((50 * 15)) # 30 kilobyte per minute * 15 minutes
-STIME=$((15*60))  # sleep 15 minutes
-#STIME=$((1*60))  # sleep 15 minutes
+# the purpose of this script is to automatically shut down the host if
+# network traffic drops below a given rate per minute AND no ssh connection is currently open
+
+############# CONFIGURATION OPTIONS ###############
+INTERVAL=15  # check interval
+KBPERMIN=50  # kilobyte per minute
+###################################################
+
+
+
+LIMITKB=$(($KBPERMIN*$INTERVAL)) # kilobytes per interval
+STIME=$(($INTERVAL*60)) # interval to seconds
 
 PREVINKB=-1
 PREVOUTKB=-1
 
 while [ true ]; do
 
-#    CNTNONSMB=`netstat --numeric-hosts -t | grep -v ' 127.' | grep -Ev '192.168.0.20.:' | grep -v microsoft | tail -n +3`
     CNTNONSMB=`netstat -t --numeric-hosts | grep -Ev ':ssh[[:space:]]*[[:alpha:]]+' | grep -v microsoft | tail -n +3 | grep -c ''`
 
     INKBYTES=0
