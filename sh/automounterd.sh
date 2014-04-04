@@ -22,6 +22,7 @@
 #    2014-04-04 added parameter -r and -i
 #               added flock usage on fstab files to provide a way of being sure the file isnt currently modified
 #               added support for directories instead of single fstab file
+#               added dummy test filesystem
 
 usage()
 {
