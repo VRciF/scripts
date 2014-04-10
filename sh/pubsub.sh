@@ -97,6 +97,7 @@ if [ ! -d "$PUBLISHERDIR" ]; then
     usage
     exit 1
 fi
+command -v inotifywait >/dev/null 2>&1 || { echo >&2 "ERROR: command inotifywait not found"; exit 1; }
 
 SUBSCRIBEDIR=$(readlink -f "$SUBSCRIBEDIR")
 PUBLISHERDIR=$(readlink -f "$PUBLISHERDIR")
