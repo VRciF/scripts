@@ -2,6 +2,62 @@
 ##!/bin/bash -x
 ##set -o xtrace
 
+
+
+#filetreesha1db.sh [options] dbfile path
+
+DBFILE=$1
+WORKINGDIR=$2
+
+STRUCTURE="CREATE TABLE IF NOT EXISTS files (path TEXT,filename TEXT, size INTEGER, inode INTEGER, modified TEXT, changed TEXT, sha1 TEXT, hashtime INTEGER, created TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+echo $STRUCTURE | sqlite3 $DBFILE || { echo >&2 "sqlite3 need to be installed.  Aborting."; exit 1; }
+
+DBFILE=$(readlink -e $DBFILE)
+
+pushd $WORKINGDIR
+find -type f | while read fname; do
+    echo $fname
+    DBFILENAME=${fname##*/}
+    DBPATH=$(dirname $fname)
+    DBPATH="${DBPATH:1:${#DBPATH}}" # remove dot
+    SIZE=`stat -c "%s" "$fname"`
+    INODE=`stat -c "%i" "$fname"`
+    MODIFIED=`stat -c "%y" "$fname"`
+    CHANGED=`stat -c "%z" "$fname"`
+
+    REHASH=1
+    STATEMENT="SELECT count(*) FROM files WHERE path=\"$DBPATH\" AND filename=\"$DBFILENAME\";"
+    CNT=`sqlite3 $DBFILE "$STATEMENT"`
+
+    if [ "$CNT" -ne "0" ]; then
+        STATEMENT="SELECT count(*) FROM files WHERE path=\"$DBPATH\" AND filename=\"$DBFILENAME\" AND size=\"$SIZE\" AND inode=\"$INODE\" AND modified=\"$MODIFIED\" AND changed=\"$CHANGED\";"
+        CNT=`sqlite3 $DBFILE "$STATEMENT"`
+        if [ "$CNT" -eq "0" ]; then
+            REHASH=1
+        else
+            REHASH=0
+        fi
+    fi
+
+    if [ "$REHASH" -eq "1" ]; then
+        `sqlite3 $DBFILE "INSERT INTO files (path,filename,size,inode,modified,changed,sha1,hashtime) VALUES ('$DBPATH','$DBFILENAME', $SIZE, $INODE, '$MODIFIED', '$CHANGED', '', 0)"`
+
+#        HASHTIMESTART=$(date +%s.%N)
+        HASHTIMESTART=$(date +%s)
+        HASH=`sha1sum "$fname"`
+        HASH=$(echo $HASH | cut -d" " -f1)
+
+#        HASHTIMEEND=$(date +%s.%N)
+        HASHTIMEEND=$(date +%s)
+        HASHTIMEDIFF=$(($HASHTIMEEND-$HASHTIMESTART))
+#        HASHTIMEDIFF=$(echo "$HASHTIMEEND - $HASHTIMESTART" | bc)
+        `sqlite3 $DBFILE "UPDATE files SET sha1='$HASH',hashtime='$HASHTIMEDIFF' WHERE path='$DBPATH' AND filename='$DBFILENAME'"`
+    fi
+done
+popd
+
+exit
+
 tmpdir="/tmp"
 logdir="/tmp"
 statedir="/tmp"
