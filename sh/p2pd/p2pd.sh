@@ -1,101 +1,8 @@
 #!/bin/bash
 
-#MISSING: o) run script if new peer becomes available
-#         o) run script if new service becomes available
-#         o) run script if peer gets removed
-#         CLIENT script to call a remote service by UUID or NAME 
+# MISSING: CLIENT script to call a remote service by UUID or NAME 
 
-command -v socat >/dev/null 2>&1 || { echo >&2 "I require 'socat' but it's not installed.  Aborting."; exit 1; }
-
-START=$(date +%s)
-
-UUID=$(cat /proc/sys/kernel/random/uuid)
-
-#set -x
-
-# directory where client executable scripts reside
-${PEERDIR:=""}
-
-# main host which, on the first run, is needed to set everything up, can be a multicast or broadcast ip for local network usage 
-INITNODE=""
-# name of the current p2pd process - this one is used to identify the host which makes it easier to send messages to destinations without knowing their exact ip:port
-# cause the ip:port is hidden by the NAME in the network
-NAME=""
-
-# array of nodes
-declare -a NODES
-# monkey port 0xAFFE = 45054
-PORT=45054
-
-function show_help {
-    >&2 echo "$0 [-h/-?] [-i HOST:PORT] [-n NAME] [-l [IP:]PORT] -e PEERDIR [-b HEARTBEATINTERVAL] [-s PEERS|HEARTBEAT|SERVICES]"
-    >&2 echo "Options are:"
-    >&2 echo "-h/-?                   this help page"
-    >&2 echo "-i HOST:PORT            the initial host and port used for heartbeat notifications, used to initialize the p2p network"
-    >&2 echo "-n NAME the             name of the current p2pd instance used to identify host(s)"
-    >&2 echo "-l [IP:]PORT            the port where to listen for heartbeat packets from peers, if IP is given the corresponding interface will be used"
-    >&2 echo "-e PEERDIR              mandatory, used to save current/initial configuration and where the services (executables) can be found"
-    >&2 echo "-b HEARTBEATINTERVAL    interval in seconds to notify peers about the daemon being still alive, default 300"
-}
-
-SHOW=""
-HEARTBEATINTERVAL=300
-
-INCOMINGPACKET=0
-
-while getopts "h?i:n:l:e:b:s:x" opt; do
-    case "$opt" in
-    h|\?)
-        show_help
-        exit 0
-        ;;
-    i)  INITNODE="$OPTARG"
-        ;;
-    n)  NAME="$OPTARG"
-        ;;
-    l)  PORT="$OPTARG"
-        ;;
-    e)  PEERDIR="$OPTARG"
-        ;;
-    b)  HEARTBEATINTERVAL="$OPTARG"
-        ;;
-    s)  SHOW="$OPTARG"
-        ;;
-    x)  INCOMINGPACKET=1
-        ;;
-    esac
-done
-
-if [ ! -d "$PEERDIR" ]; then
-    >&2 echo "ERROR: given peerdirectory '$PEERDIR' not a directory"
-    show_help
-    exit 1
-fi
-if [ -f "$PEERDIR/.p2pd.cfg" ]; then
-    exec 3<>$PEERDIR/.p2pd.cfg
-
-    read TMP <&3
-    if [ "${#NAME}" -eq "0" ]; then
-        NAME=$TMP
-    fi
-
-    read UUID <&3
-
-    read TMP <&3
-    if [ "${#PORT}" -eq "0" ]; then
-        PORT=$TMP
-    fi
-    read TMP <&3
-    if [ "${#INITNODE}" -eq "0" ]; then
-        INITNODE=$TMP
-    fi
-    read TMP <&3
-    if [ "${#HEARTBEATINTERVAL}" -eq "0" ]; then
-        HEARTBEATINTERVAL=$TMP
-    fi
-fi
-
-if [ "$INCOMINGPACKET" -eq "1" ]; then
+function parse_network_packet() {
     read LINE
     PREVIFS="$IFS"
     IFS=':' read -a parts <<< "$LINE"
@@ -113,12 +20,30 @@ if [ "$INCOMINGPACKET" -eq "1" ]; then
 
     case "$COMMAND" in
         "HB")
-
+            PREVIFS="$IFS"
             IFS=':' read PEERUUID PEERNAME PEERPORT <<< "$NAMESPACE"
+            IFS=$PREVIFS
 
             touch $PEERDIR/.peers
             (
                 flock -x 200
+
+                PCNT=$(grep -c "$PEERUUID:$PEERNAME:$SOCAT_PEERADDR:$PEERPORT" $PEERDIR/.peers)
+                if [ "$PCNT" -eq "0" ]; then
+                    export PEERUUID=$PEERUUID
+                    export PEERNAME=$PEERNAME
+                    export PEERADDR=$SOCAT_PEERADDR
+                    export PEERPORT=$PEERPORT
+                    export P2P_TASK="peer-up"
+
+                    # call "new-peer" script'
+                    while read SCRIPT; do
+                        SCRIPT="$PEERDIR/p-mod.d/$SCRIPT"
+                        if [ -x "$SCRIPT" ]; then
+                            exec $SCRIPT >/dev/null 2>&1
+                        fi
+                    done < <(ls -1 $PEERDIR/p-mod.d 2>/dev/null)
+                fi
 
                 # remove current heartbeat peer
                 grep -v "$PEERUUID:$PEERNAME:$SOCAT_PEERADDR:$PEERPORT" $PEERDIR/.peers > $PEERDIR/.peers.tmp
@@ -146,24 +71,62 @@ if [ "$INCOMINGPACKET" -eq "1" ]; then
         "SERVICES")
             PEERUUID=$NAMESPACE
             if [ "$UUID" != "$PEERDIR" ]; then
-	            touch $PEERDIR/.services
-	            (
-	                flock -x 200
-	
-	                while read SERVICE || [ -n "$SERVICE" ]; do
-	                    echo "$PEERUUID:$SERVICE" >> $PEERDIR/.services
-	                done
-	
-	                sort -u -o $PEERDIR/.services $PEERDIR/.services
-	            ) 200<$PEERDIR/.services
+                touch $PEERDIR/.services
+                (
+                    flock -x 200
+
+	                PCNT=$(grep -c "$PEERUUID:$SERVICE" $PEERDIR/.services)
+	                if [ "$PCNT" -eq "0" ]; then
+	                    export PEERUUID=$PEERUUID
+	                    export PEERSERVICE=$SERVICE
+	                    export PEERADDR=$SOCAT_PEERADDR
+	                    export P2P_TASK="service-up"
+
+	                    # call "service up" script
+	                    while read SCRIPT; do
+	                        SCRIPT="$PEERDIR/p-mod.d/$SCRIPT"
+	                        if [ -x "$SCRIPT" ]; then
+	                            exec $SCRIPT >/dev/null 2>&1
+	                        fi
+	                    done < <(ls -1 $PEERDIR/p-mod.d 2>/dev/null)
+	                fi
+
+                    while read SERVICE || [ -n "$SERVICE" ]; do
+                        echo "$PEERUUID:$SERVICE" >> $PEERDIR/.services
+                    done
+    
+                    sort -u -o $PEERDIR/.services $PEERDIR/.services
+                ) 200<$PEERDIR/.services
             fi
             ;;
         "EXEC")
-            RELATIVE=$(realpath -s "/$NAMESPACE")
+            PREVIFS="$IFS"
+            IFS=':' read TRANSACTIONO PARTNO EXECPATH <<< "$NAMESPACE"
+            IFS='/' read -a parts <<< "/$EXECPATH"
+            IFS=$PREVIFS
+
+            # remove relative parts of path
+            for i in "${!parts[@]}"
+            do
+                if [ "${parts[$i]}" == "" ]; then
+                    unset parts[$i]
+                elif [ "${parts[$i]}" == "." ]; then
+                    unset parts[$i]
+                elif [ "${parts[$i]}" == ".." ]; then
+                    unset parts[$i]
+                    if [ "$i" -gt 0 ]; then
+                        unset parts[$(($i-1))]
+                    fi
+                fi
+            done
+
             if [ -x "$PEERDIR/$RELATIVE.sh" ]; then
                 RELATIVE="$RELATIVE.sh"
             fi
+
             if [ -x "$PEERDIR/$RELATIVE" ]; then
+                export P2PD_TID="$TRANSACTIONO"
+                export P2PD_PNO="$PARTNO"
                 exec $PEERDIR/$RELATIVE <&0
             fi
             ;;
@@ -182,7 +145,10 @@ if [ "$INCOMINGPACKET" -eq "1" ]; then
                 continue
             fi
 
-            IFS=':' read PEERUUID REST <<< "$LINE"
+            PREVIFS="$IFS"
+            IFS=':' read PEERUUID PEERNAME PEERADDR PEERPORT <<< "$LINE"
+            IFS=$PREVIFS
+
             TIMESTAMP=0
             if [ -f $PEERDIR/.heartbeat.$PEERUUID ]; then
                 TIMESTAMP=$(stat -c %Y $PEERDIR/.heartbeat.$PEERUUID)
@@ -193,6 +159,30 @@ if [ "$INCOMINGPACKET" -eq "1" ]; then
             else
                 rm -f $PEERDIR/.heartbeat.$PEERUUID
 
+                export PEERUUID=$PEERUUID
+                export PEERNAME=$PEERNAME
+                export PEERADDR=$SOCAT_PEERADDR
+                export PEERPORT=$PEERPORT
+
+                SCNT=0
+                while read SLINE; do
+                    PREVIFS="$IFS"
+                    IFS=':' read PEERUUID SERVICE <<< "$LINE"
+                    IFS=$PREVIFS
+
+                    export SERVICE_$SCNT="$SERVICE"
+                    SCNT=$(($SCNT+1))
+                done < <(grep "$PEERUUID:" $PEERDIR/.services)
+
+                # call "remove-peer" script'
+                export P2P_TASK="peer-down"
+                while read SCRIPT; do
+                    SCRIPT="$PEERDIR/p-mod.d/$SCRIPT"
+                    if [ -x "$SCRIPT" ]; then
+                        exec $SCRIPT >/dev/null 2>&1
+                    fi
+                done < <(ls -1 $PEERDIR/p-mod.d 2>/dev/null)
+
                 grep -v "$PEERUUID:" $PEERDIR/.services > $PEERDIR/.services.tmp
                 mv $PEERDIR/.services.tmp $PEERDIR/.services
             fi
@@ -201,45 +191,7 @@ if [ "$INCOMINGPACKET" -eq "1" ]; then
     ) 200<$PEERDIR/.peers
 
     exit 0;
-fi
-
-
-# if show command is given
-case "$SHOW" in
-    "PEERS")
-        cat $PEERDIR/.peers
-        exit 0
-        ;;
-    "HEARTBEAT")
-        cat $PEERDIR/.heartbeat.*
-        exit 0
-        ;;
-    "SERVICES")
-        cat $PEERDIR/.services
-        exit 0
-        ;;
-esac
-
-if ! [[ $HEARTBEATINTERVAL =~ ^[0-9]+$ ]] ; then
-    >&2 echo "ERROR: HeartbeatInterval '$HEARTBEATINTERVAL' not a number"
-    show_help
-    exit 2
-fi
-if [[ $HEARTBEATINTERVAL -le 0 ]] ; then
-    >&2 echo "ERROR: HeartbeatInterval '$HEARTBEATINTERVAL' not a positive number"
-    show_help
-    exit 2
-fi
-
-echo "$$" > $PEERDIR/.pid
-
-# save current command line configuration
-echo "$NAME" > $PEERDIR/.p2pd.cfg
-echo "$UUID" >> $PEERDIR/.p2pd.cfg
-echo "$PORT" >> $PEERDIR/.p2pd.cfg
-echo "$INITNODE" >> $PEERDIR/.p2pd.cfg
-echo "$HEARTBEATINTERVAL" >> $PEERDIR/.p2pd.cfg
-
+}
 function send_to_peers(){
     PACKET=$1
     PEER=$2
@@ -281,7 +233,7 @@ function heartbeat_task(){
             read HOSTUPTIME
             read HOSTIDLETIME
 
-	    # send peer notification
+        # send peer notification
         NOW=$(date +%s)
         PREVIFS=$IFS
         IFS=' ' read UPTIME IDLETIME </proc/uptime
@@ -289,28 +241,8 @@ function heartbeat_task(){
 
         DIFF=$(($NOW-$START))
 
-        PACKET=""
-        while read LINE || [ -n "$LINE" ]; do
-            PLEN=${#PACKET}
-            LLEN=${#LINE}
-            # if packet size is greater than mtu
-            if [ $(($PLEN+$LLEN+1)) -ge 1500 ]; then
-                send_to_peers "$PACKET" "$INITNODE"
-                PACKET=""
-            fi
-
-            if [ "${#PACKET}" -eq "0" ]; then
-                PACKET="HB:$UUID:$NAME:$PORT\n$DIFF\n$UPTIME\n$IDLETIME"
-            fi
-
-            PACKET="$PACKET\n$LINE"
-        done < <(cat /proc/net/dev | tail -n -2 | grep -v lo:)
-        if [ "${#PACKET}" -ne "0" ]; then
-            send_to_peers "$PACKET" "$INITNODE"
-        fi
-
-        #PACKET="HB:$UUID:$NAME:$PORT\n$DIFF\n$UPTIME\n$IDLETIME\n$NETSTATS"
-        #send_to_peers "$PACKET" "$INITNODE"
+        PACKET="HB:$UUID:$NAME:$PORT\n$DIFF\n$UPTIME\n$IDLETIME\n$NETSTATS"
+        send_to_peers "$PACKET" "$INITNODE"
 
         # notify every known peer about local services and known remote peers
         PACKET=""
@@ -344,10 +276,10 @@ function heartbeat_task(){
             send_to_peers "$PACKET" "$INITNODE"
         fi
 
-	    # notify every known peer about local services and known remote peers
-	    PACKET=""
-	    while read LINE || [ -n "$LINE" ]; do
-		    SERVICE=${LINE#$PEERDIR}
+        # notify every known peer about local services and known remote peers
+        PACKET=""
+        while read LINE || [ -n "$LINE" ]; do
+            SERVICE=${LINE#$PEERDIR}
 
             PLEN=${#PACKET}
             SLEN=${#SERVICE}
@@ -361,16 +293,217 @@ function heartbeat_task(){
                 PACKET="SERVICES:$UUID"
             fi
 
-	        PACKET="$PACKET\n$SERVICE"
-		done < <(find $PEERDIR -type f -executable 2>/dev/null)
-		if [ "${#PACKET}" -ne "0" ]; then
+            PACKET="$PACKET\n$SERVICE"
+        done < <(find $PEERDIR -type f -executable 2>/dev/null)
+        if [ "${#PACKET}" -ne "0" ]; then
             send_to_peers "$PACKET" "$INITNODE"
         fi
 
-        inotifywait -e close_write -e attrib --exclude '\.(heartbeat|peers|services|p2pd).*' -r -q -t $HEARTBEATINTERVAL $PEERDIR
+        inotifywait -e close_write -e attrib --exclude '\.(heartbeat|peers|services|p2pd|p-mod.d).*' -r -q -t $HEARTBEATINTERVAL $PEERDIR
     done
 }
 
+function call_service() {
+    PEERDIR=$1
+    SERVICENAME=$2
+    DESTINATIONHOSTS=$3
+
+    PREVIFS=$IFS
+    IFS=':' read -a parts <<< "$DESTINATIONHOSTS"
+    IFS=$PREVIFS
+
+    REGEX=$(printf "\\|%s" "${parts[@]}")
+    REGEX=${REGEX:1}
+
+    grep -e 'URL\|Get' examples.desktop
+
+    TID=$(cat /proc/sys/kernel/random/uuid)
+    CNT=0
+
+    MAXPLEN=1500
+    while [ true ]; do
+        PACKET="EXEC:$TID:$CNT:$SERVICENAME\n"
+        MAXPAYLOADLEN=$(($MAXPLEN-${#PACKET}))
+        PAYLOAD=$(head -c $MAXPAYLOADLEN)
+        
+        if [ "${#PAYLOAD}" -eq "0" ];then
+            break
+        fi
+
+        PACKET="$PACKET$PAYLOAD"
+        while read LINE; do
+              PREVIFS=$IFS
+              IFS=':' read -a PEERUUID PEERNAME PEERADDR PEERPORT <<< "$LINE"
+              IFS=$PREVIFS
+
+              echo -n "$PACKET" | socat STDIO "UDP-DATAGRAM:$PEERADDR:$PEERPORT"
+        done < <(grep -e '$REGEX' $PEERDIR/.peers)
+    done
+}
+
+function show_current_stats(){
+    SHOW=$1
+
+    case "$SHOW" in
+    "PEERS")
+        cat $PEERDIR/.peers
+        exit 0
+        ;;
+    "HEARTBEAT")
+        cat $PEERDIR/.heartbeat.*
+        exit 0
+        ;;
+    "SERVICES")
+        cat $PEERDIR/.services
+        exit 0
+        ;;
+    esac
+}
+
+
+function show_help() {
+    >&2 echo "$0 [-h/-?] -d PEERDIR [-i HOST:PORT] [-n NAME] [-l [IP:]PORT] [-b HEARTBEATINTERVAL] [-s PEERS|HEARTBEAT|SERVICES] [-e SERVICENAME] [-g [UUID][:NAME][:...]]"
+    >&2 echo "Options are:"
+    >&2 echo "-h/-?                   this help page"
+    >&2 echo "-i HOST:PORT            the initial host and port used for heartbeat notifications, used to initialize the p2p network"
+    >&2 echo "-n NAME the             name of the current p2pd instance used to identify host(s)"
+    >&2 echo "-l [IP:]PORT            the port where to listen for heartbeat packets from peers, if IP is given the corresponding interface will be used"
+    >&2 echo "-d PEERDIR              mandatory, used to save current/initial configuration and where the services (executables) can be found"
+    >&2 echo "-b HEARTBEATINTERVAL    interval in seconds to notify peers about the daemon being still alive, default 300"
+    >&2 echo "-s PEERS|HEARTBEAT|SERVICES    show the current stats for know peers, heartbeat or services"
+    >&2 echo "-e SERVICENAME          call the given service"
+    >&2 echo "-g UUID:NAME    show the current stats for know peers, heartbeat or services"
+}
+
+command -v socat >/dev/null 2>&1 || { echo >&2 "ERROR: I require 'socat' but it's not installed.  Aborting."; exit 1; }
+
+START=$(date +%s)
+
+UUID=$(cat /proc/sys/kernel/random/uuid)
+
+#set -x
+
+# directory where client executable scripts reside
+${PEERDIR:=""}
+
+# main host which, on the first run, is needed to set everything up, can be a multicast or broadcast ip for local network usage 
+INITNODE=""
+# name of the current p2pd process - this one is used to identify the host which makes it easier to send messages to destinations without knowing their exact ip:port
+# cause the ip:port is hidden by the NAME in the network
+NAME=""
+
+# array of nodes
+declare -a NODES
+# monkey port 0xAFFE = 45054
+PORT=45054
+MTU=0
+
+SHOW=""
+HEARTBEATINTERVAL=300
+
+INCOMINGPACKET=0
+
+EXECUTESERVICE=""
+EXECUTEDESTINATION=""
+
+# load options from config file
+if [ -f "$PEERDIR/.p2pd.cfg" ]; then
+    source "$PEERDIR/.p2pd.cfg"
+fi
+
+# save command line options
+while getopts "h?i:n:l:e:b:s:x" opt; do
+    case "$opt" in
+    h|\?)
+        show_help
+        exit 0
+        ;;
+    i)  INITNODE="$OPTARG"
+        ;;
+    n)  NAME="$OPTARG"
+        ;;
+    l)  PORT="$OPTARG"
+        ;;
+    d)  PEERDIR="$OPTARG"
+        ;;
+    b)  HEARTBEATINTERVAL="$OPTARG"
+        ;;
+    s)  SHOW="$OPTARG"
+        ;;
+    x)  INCOMINGPACKET=1
+        ;;
+    e)  EXECUTESERVICE="$OPTARG"
+        ;;
+    g)  EXECUTEDESTINATION="$OPTARG"
+        ;;
+    esac
+done
+
+# validate command line options
+if [ ! -d "$PEERDIR" ]; then
+    >&2 echo "ERROR: given peerdirectory '$PEERDIR' not a directory"
+    show_help
+    exit 1
+fi
+if ! [[ $HEARTBEATINTERVAL =~ ^[0-9]+$ ]] ; then
+    >&2 echo "ERROR: HeartbeatInterval '$HEARTBEATINTERVAL' not a number"
+    show_help
+    exit 2
+fi
+if [[ $HEARTBEATINTERVAL -le 0 ]] ; then
+    >&2 echo "ERROR: HeartbeatInterval '$HEARTBEATINTERVAL' not a positive number"
+    show_help
+    exit 2
+fi
+
+# if it's about parsing an incoming network data packet
+if [ "$INCOMINGPACKET" -eq "1" ]; then
+    parse_network_packet
+    exit 0
+fi
+
+# if show command is given
+if [ "${#SHOW}" -ne "0" ]; then
+    show_current_stats "$SHOW"
+fi
+
+# if a peer's service shall be called
+if [ "${#EXECUTESERVICE}" -ne "0" ]; then
+    call_service "$PEERDIR" "$EXECUTESERVICE" "$EXECUTEDESTINATION"
+    exit 0
+fi
+
+# save current daemon pid
+echo "$$" > $PEERDIR/.pid
+
+# determine maximum transmission unit
+if [ "$MTU" -eq "0" ]; then
+    command -v ping >/dev/null 2>&1 || MTU=1500
+fi
+
+if [ "$MTU" -eq "0" ]; then
+	PKT_SIZE=1473
+	HOSTNAME="8.8.8.8"
+
+	count=1
+	while [ $count -eq 1 ]; do
+	 ((PKT_SIZE--))
+	 count=$((`ping -M do -c 1 -s $PKT_SIZE $HOSTNAME | grep -c "Frag needed"`))
+	done
+
+	MTU=$((PKT_SIZE + 28))
+fi
+
+# save current command line configuration
+echo "NAME=$NAME" > $PEERDIR/.p2pd.cfg
+echo "UUID=$UUID" >> $PEERDIR/.p2pd.cfg
+echo "PORT=$PORT" >> $PEERDIR/.p2pd.cfg
+echo "INITNODE$INITNODE" >> $PEERDIR/.p2pd.cfg
+echo "HEARTBEATINTERVAL=$HEARTBEATINTERVAL" >> $PEERDIR/.p2pd.cfg
+echo "MTU=$MTU" >> $PEERDIR/.p2pd.cfg
+
+# parse given listen PORT for host part
+# if a host is given it is used as multicast address
 PREVIFS=$IFS
 IFS=':' read -a parts <<< "$PORT"
 IFS=$PREVIFS
@@ -382,14 +515,17 @@ HOST=$(printf ":%s" "${parts[@]}")
 HOST=${HOST:1}
 unset parts
 
-
 heartbeat_task "$NAME" "$PEERDIR" $PORT $HEARTBEATINTERVAL "$INITNODE" $START &
 HEARTBEAT_PID=$!
 
 ARG="UDP-RECVFROM:$PORT"
 
 if [ "${#HOST}" -ne "0" ]; then
-    ARG="UDP-RECVFROM:$PORT,ip-add-membership=$HOST"
+	if [[ $HOST =~ ^(ff|2(2[4-9]|3[0-9])) ]]; then
+	    ARG="UDP-RECVFROM:$PORT,ip-add-membership=$HOST"
+	else
+	    ARG="UDP-RECVFROM:$PORT,bind=$HOST"
+	fi
 fi
 
 socat $ARG,setsockopt-int=1:2:1,fork EXEC:"$0 -x -e '$PEERDIR'"
@@ -397,4 +533,4 @@ socat $ARG,setsockopt-int=1:2:1,fork EXEC:"$0 -x -e '$PEERDIR'"
 
 kill $HEARTBEAT_PID >/dev/null 2>&1
 
-echo "" > $PEERDIR/.pid
+rm -f $PEERDIR/.pid
