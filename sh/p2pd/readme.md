@@ -7,7 +7,7 @@ p2pd.sh uses 'find' to search for executable scripts in a command line given dir
 'inotifywait' to detect modifications in peer-directory.
 The executables found in peer-directory are so called **services**. The name of known local services are distributed to
 all known peers using UDP in a given interval.
-Thus every p2pd.sh peer in the network generates a list of all services every peer hosts and is then able to
+Thus every peer in the network generates a list of all services for every peer and is then able to
 call those services and send arbitrary data to the services.
 Since a service is an executable the received data for the services is streamed to the executables stdin.
 
