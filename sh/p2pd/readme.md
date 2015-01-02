@@ -1,11 +1,11 @@
 # P2Pd - peer to peer daemon
 ## What's it all about?
-p2pd.sh is a shell script, called *peer*, which uses socat to listen on a command line given udp-port for heartbeat packets
+p2pd.sh is a shell script, furtherly called **peer**, which uses socat to listen on a command line given udp-port for heartbeat packets
 of other p2pd.sh daemons.
 The heartbeat packets are use'd to generate a list of known peers of the network.
-p2pd.sh uses find to search for executable scripts in a command line given directory, called *peer-directory*, and uses
+p2pd.sh uses find to search for executable scripts in a command line given directory, called **peer-directory**, and uses
 inotifywait to detect modifications in peer-directory.
-The executables found in peer-directory are so called *services*. The name of known local services are distributed to
+The executables found in peer-directory are so called **services**. The name of known local services are distributed to
 all known peers using UDP in a given interval.
 Thus every p2pd.sh peer in the network generates a list of all services every peer hosts and is then able to
 call those services and send arbitrary data to the services.
