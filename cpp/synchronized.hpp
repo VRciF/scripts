@@ -160,7 +160,9 @@ class Synchronized{
                 rval = pthread_cond_timedwait(&this->metaPtr->cond, &this->metaPtr->lock, &timeUntilToWait);
             }
             switch(rval){
-                case 0: break;
+                case 0:
+                    this->metaPtr->lockOwner = pthread_self();
+                    break;
                 case EINVAL: throw std::runtime_error("invalid time or condition or mutex given");
                 case EPERM: throw std::runtime_error("trying to wait is only allowed in the same thread holding the mutex");
             }
