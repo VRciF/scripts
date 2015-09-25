@@ -26,29 +26,20 @@ class Synchronized{
         metaMutex *metaPtr;
         int dereference;
         
-        const void* getAccessPointer(){
-            if(dereference){
-                return (const void*)accessPtr;
-            }
-            else{
-                return this->accessPtr;
-            }
-        }
+        template<typename T>
+        T * getAccessPtr(T & obj) { return &obj; } //turn reference into pointer!
+        template<typename T>
+        T * getAccessPtr(T * obj) { return obj; } //obj is already pointer, return it!
 
     public:
         template<typename T>
-        Synchronized(const T &ptr) : accessPtr(&ptr){
-            dereference = 0;
-
-            if(typeid(ptr).name()[0]=='P'){
-                dereference = 1;
-            }
+        Synchronized(const T &ptr) : accessPtr(getAccessPtr(ptr)){
             //std::cout << "type: " << typeid(ptr).name() << std::endl;
 
             pthread_mutex_lock(&this->getMutex());
 
             std::map<const void*, metaMutex*>& mmap = this->getMutexMap();
-            std::map<const void*, metaMutex*>::iterator it = mmap.find(this->getAccessPointer());
+            std::map<const void*, metaMutex*>::iterator it = mmap.find(this->accessPtr);
             if(it != mmap.end()){
                 this->metaPtr = it->second;
                 this->metaPtr->counter++;
@@ -57,7 +48,7 @@ class Synchronized{
                 this->metaPtr = new metaMutex();
                 pthread_mutex_init(&this->metaPtr->lock, NULL);
                 this->metaPtr->counter = 1;
-                mmap.insert(std::make_pair(this->getAccessPointer(), this->metaPtr));
+                mmap.insert(std::make_pair(this->accessPtr, this->metaPtr));
             }
 
             pthread_mutex_unlock(&this->getMutex());
@@ -73,7 +64,7 @@ class Synchronized{
             pthread_mutex_lock(&this->getMutex());
             metaPtr->counter--;
             if(metaPtr->counter<=0){
-                this->getMutexMap().erase(this->getAccessPointer());
+                this->getMutexMap().erase(this->accessPtr);
                 delete metaPtr;
             }
             pthread_mutex_unlock(&this->getMutex());
