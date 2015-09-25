@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <map>
 #include <iostream>
+#include <stdexcept>
 #include <typeinfo>
 
 class Synchronized{
@@ -33,8 +34,12 @@ class Synchronized{
 
     public:
         template<typename T>
-        Synchronized(const T &ptr) : accessPtr(getAccessPtr(ptr)){
+        Synchronized(const T &ptr, bool lockit=true) : accessPtr(getAccessPtr(ptr)){
             //std::cout << "type: " << typeid(ptr).name() << std::endl;
+
+            if(this->accessPtr==NULL){
+                throw std::runtime_error(std::string("Syncronizing on NULL pointer is not valid, referenced type is: ")+typeid(ptr).name());
+            }
 
             pthread_mutex_lock(&this->getMutex());
 
@@ -53,10 +58,15 @@ class Synchronized{
 
             pthread_mutex_unlock(&this->getMutex());
 
-            pthread_mutex_lock(&this->metaPtr->lock);
+            if(lockit){
+                pthread_mutex_lock(&this->metaPtr->lock);
+            }
         }
 
         operator int() { return 1; }
+        const void* getSyncronizedAddress(){
+            return this->accessPtr;
+        }
 
         ~Synchronized(){
             pthread_mutex_unlock(&this->metaPtr->lock);

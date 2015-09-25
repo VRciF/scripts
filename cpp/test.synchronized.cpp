@@ -1,6 +1,7 @@
 #include "synchronized.hpp"
 
 #include <unistd.h>
+#include <stdexcept>
 
 #include <iostream>
 #include <map>
@@ -44,6 +45,37 @@ int main(int argc, char **argv){
     
     pthread_join(th1, NULL);
     pthread_join(th2, NULL);
+    
+    std::cout << "thread test finished - testing more cases:" << std::endl;
+    
+    {
+        int somevar;
+        int *someptr = &somevar;
+        void *ptr = NULL;
+        std::string object = "asdf";
+        const char *cstr = "asdf";
+        
+        Synchronized s1(somevar, false), s2(someptr, false), s3(&somevar, false), s4(&someptr, false),
+                     s6(&ptr, false), s7(object, false), s8(&object, false), s9("asdf", false);
+
+        std::cout << "somevar addr: " << (&somevar) << "=" << s1.getSyncronizedAddress() << std::endl;
+        std::cout << "someptr addr: " << (someptr) << "=" << s2.getSyncronizedAddress() << std::endl;
+        std::cout << "somevar addr: " << (&somevar) << "=" << s3.getSyncronizedAddress() << std::endl;
+        std::cout << "s1 equals s3: " << s1.getSyncronizedAddress() << "=" << s3.getSyncronizedAddress() << std::endl;
+        std::cout << "s2 different s4: " << s2.getSyncronizedAddress() << "=" << s4.getSyncronizedAddress() << std::endl;
+
+        std::cout << "Object test: " << (&object) << "=" << s7.getSyncronizedAddress() << std::endl;
+        std::cout << "Object ptrtest: " << (&object) << "=" << s8.getSyncronizedAddress() << std::endl;
+        std::cout << "Constant c-string test: " << ((const void*)cstr) << "=" << s9.getSyncronizedAddress() << std::endl;
+
+        std::cout << "Null pointer test2: " << (&ptr) << "=" << s6.getSyncronizedAddress() << std::endl;
+        try{
+            Synchronized s5(ptr, false);
+            std::cout << "Null pointer test: " << (ptr) << "=" << s5.getSyncronizedAddress() << std::endl;
+        }catch(const std::runtime_error &ex){
+            std::cout  << "catched exception:" << ex.what() << std::endl;
+        }
+    }
 
     std::cout << "exit" << std::endl;
     return 0;
