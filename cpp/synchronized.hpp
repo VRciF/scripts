@@ -6,7 +6,7 @@
  *        o) IF synchronized(somevar){} is used on a simple variable,
  *           then it's address &somevar will be used
  *        o) IF ptrToSomevar=&somevar; synchronized(&somevar){} OR synchronized(ptrToSomevar) is used on a pointer,
- *           then the pointers address &somevar will be used
+ *           then the pointers address &somevar, the address of somevar, will be used
  *        o) IF ptrToSomevar=&somevar; synchronized(&ptrToSomevar){} is used THEN
  *           the variable ptrToSomevar gets locked! NOT somevar AND NOT &somevar
  *           this is because, synchronized(&ptrToSomevar){} receives a
@@ -18,7 +18,7 @@
  * but synchronized(&ptrToSomevar){} won't
  *
  * Design Pattern:
- *   to create have a whole function synchronized like it's done in java with
+ *   to have a whole function synchronized like it's done in java with
  *   java: public synchronized void fooBar(){}
  *   you can use static member's like
  *   c++: void fooBar(){ Synchronized functionLock(__func__); }
