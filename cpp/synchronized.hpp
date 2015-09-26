@@ -195,6 +195,9 @@ class Synchronized{
         }
 };
 
-#define synchronized(ptr) if(Synchronized sync_##__LINE__ = Synchronized(ptr))
+/* from http://stackoverflow.com/questions/1597007/creating-c-macro-with-and-line-token-concatenation-with-positioning-macr */
+#define synchronizedTokenPaste(x,y) x ## y
+#define synchronizedTokenPaste2(x,y) synchronizedTokenPaste(x,y)
+#define synchronized(ptr) if(Synchronized synchronizedTokenPaste2(sync_, __LINE__) = Synchronized(ptr))
 
 #endif
