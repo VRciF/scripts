@@ -1,3 +1,5 @@
+// compile: g++ -o test.synchronized test.synchronized.cpp -lpthread
+
 #include "synchronized.hpp"
 
 #include <unistd.h>
@@ -13,13 +15,22 @@ void synchronizedFunction(){
     Synchronized synToken(__func__);
 
     std::cout << __func__ << std::endl;
-    sleep(5);
+    sleep(3);
+}
+
+void* fsyncTest(void *ptr){
+    std::cout << "thread calling synchronizedFunction" << std::endl;
+    synchronizedFunction();
+    std::cout << "thread synchronizedFunction finished" << std::endl;
+    return NULL;
 }
 
 void* thread1(void *ptr){
     std::cout << "thread 1 started" << std::endl;
     synchronized(container){
         std::cout << "container is locked in thread 1" << std::endl;
+        std::cout << "testing direct synchronization variable access: " << sync_28.getSynchronizedAddress() << std::endl;
+
         container.insert(std::make_pair("a", "b"));
         std::cout << "sleeping" << std::endl;
         sleep(3);
@@ -27,16 +38,11 @@ void* thread1(void *ptr){
         container.insert(std::make_pair("c", "d"));
         std::cout << "leaving syncronization on thread1" << std::endl;
     }
-    std::cout << "thread 1 using synchronized function" << std::endl;
-    synchronizedFunction();
-    std::cout << "thread 1 finished synchronized function" << std::endl;
     return NULL;
 }
 void* thread2(void *ptr){
     sleep(1);
-    std::cout << "thread 2 started - using synchronized function" << std::endl;
-    synchronizedFunction();
-    std::cout << "thread 2: synchronized function finished" << std::endl;
+    std::cout << "thread 2 started" << std::endl;
     synchronized(container){
         std::cout << "container is locked in thread 2" << std::endl;
         std::map<std::string,std::string>::iterator it = container.begin();
@@ -78,8 +84,22 @@ int main(int argc, char **argv){
     pthread_create(&th2, NULL, thread2, NULL);
     pthread_join(th1, NULL);
     pthread_join(th2, NULL);
-    
-    std::cout << "thread test finished - testing more cases:" << std::endl;
+
+    std::cout << std::endl << "testing function synchronization" << std::endl;
+
+    pthread_create(&th1, NULL, fsyncTest, NULL);
+    pthread_create(&th2, NULL, fsyncTest, NULL);
+    pthread_join(th1, NULL);
+    pthread_join(th2, NULL);
+
+    std::cout << std::endl << "testing wait/notify" << std::endl; 
+
+    pthread_create(&th1, NULL, syncThread1, NULL);
+    pthread_create(&th2, NULL, syncThread2, NULL);
+    pthread_join(th1, NULL);
+    pthread_join(th2, NULL);   
+
+    std::cout << std::endl << "thread test finished - testing more cases:" << std::endl;
     
     {
         int somevar;
@@ -109,11 +129,6 @@ int main(int argc, char **argv){
             std::cout  << "catched exception:" << ex.what() << std::endl;
         }
     }
-
-    pthread_create(&th1, NULL, syncThread1, NULL);
-    pthread_create(&th2, NULL, syncThread2, NULL);
-    pthread_join(th1, NULL);
-    pthread_join(th2, NULL);
 
     return 0;
 }
