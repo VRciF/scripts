@@ -76,7 +76,7 @@ class Synchronized{
 #if __cplusplus > 199711L
         typedef std::multimap<std::thread::id, LockType> t_lockmap;
 #else
-        typedef std::multimap<pthread_id_np_t, LockType> t_lockmap;
+        typedef std::multimap<pthread_t, LockType> t_lockmap;
 #endif
 
         typedef struct metaMutex{
@@ -128,7 +128,7 @@ class Synchronized{
 
 public:
         template<typename T>
-        Synchronized(const T &ptr, LockType ltype = LockType::WRITE) : ltype(ltype),accessPtr(getAccessPtr(ptr)){
+        Synchronized(const T &ptr, LockType ltype = WRITE) : ltype(ltype),accessPtr(getAccessPtr(ptr)){
             //std::cout << "type: " << typeid(ptr).name() << std::endl;
 
             if(this->accessPtr==NULL){
@@ -147,7 +147,7 @@ public:
 
                     std::pair<t_lockmap::iterator, t_lockmap::iterator> range = this->metaPtr->lockingThreads.equal_range(std::this_thread::get_id());
                     for(;range.first!=range.second;range.first++){
-                        if(range.first->second == LockType::WRITE || ltype==LockType::WRITE){
+                        if(range.first->second == WRITE || ltype == WRITE){
                             throw std::runtime_error(std::string("deadlock detected"));
                         }
                     }
@@ -172,26 +172,26 @@ public:
             if(it != mmap.end()){
                 this->metaPtr = it->second;
 
-                std::pair<t_lockmap::iterator, t_lockmap::iterator> range = this->metaPtr->lockingThreads.equal_range(pthread_getthreadid_np());
+                std::pair<t_lockmap::iterator, t_lockmap::iterator> range = this->metaPtr->lockingThreads.equal_range(pthread_self());
                 for(;range.first!=range.second;range.first++){
-                    if(range.first->second == LockType::WRITE || ltype==LockType::WRITE){
+                    if(range.first->second == WRITE || ltype == WRITE){
                         throw std::runtime_error(std::string("deadlock detected"));
                     }
                 }
-                this->metaPtr->lockingThreads.insert(std::make_pair(pthread_getthreadid_np(), ltype));
+                this->metaPtr->lockingThreads.insert(std::make_pair(pthread_self(), ltype));
             }
             else{
                 this->metaPtr = new metaMutex();
                 pthread_rwlock_init(&this->metaPtr->rwlock, NULL);
                 pthread_mutex_init(&this->metaPtr->lock, NULL);
                 pthread_cond_init(&this->metaPtr->cond, NULL);
-                this->metaPtr->lockingThreads.insert(std::make_pair(pthread_getthreadid_np(), ltype));
+                this->metaPtr->lockingThreads.insert(std::make_pair(pthread_self(), ltype));
                 mmap.insert(std::make_pair(this->accessPtr, this->metaPtr));
             }
 
             pthread_mutex_unlock(&this->getMutex());
 #endif
-            if(this->ltype == LockType::WRITE){
+            if(this->ltype == WRITE){
                 pthread_rwlock_wrlock(&this->metaPtr->rwlock);
             }
             else{
@@ -212,7 +212,7 @@ public:
                 t_lockmap::iterator it = metaPtr->lockingThreads.find(std::this_thread::get_id());
 #else
                 pthread_mutex_lock(&this->getMutex());
-                t_lockmap::iterator it = metaPtr->lockingThreads.find(pthread_getthreadid_np());
+                t_lockmap::iterator it = metaPtr->lockingThreads.find(pthread_self());
 #endif
                 if(it!=metaPtr->lockingThreads.end()){
                     metaPtr->lockingThreads.erase(it);
@@ -257,7 +257,7 @@ public:
             }catch(...){
                 eptr = std::current_exception();
             }
-            if(this->ltype == LockType::WRITE){
+            if(this->ltype == WRITE){
                 pthread_rwlock_wrlock(&this->metaPtr->rwlock);
             }
             else{
@@ -291,7 +291,7 @@ public:
                 rval = pthread_cond_timedwait(&this->metaPtr->cond, &this->metaPtr->lock, &timeUntilToWait);
             }
             pthread_mutex_unlock(&this->metaPtr->lock);
-            if(this->ltype == LockType::WRITE){
+            if(this->ltype == WRITE){
                 pthread_rwlock_wrlock(&this->metaPtr->rwlock);
             }
             else{
