@@ -1,3 +1,4 @@
+// g++ -o example.synchronized example.synchronized.cpp -lpthread
 #include <unistd.h>
 #include <iostream>
 
