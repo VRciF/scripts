@@ -205,12 +205,6 @@ public:
         }
 
         ~Synchronized(){
-#if __cplusplus > 199711L
-            this->metaPtr->ulock.unlock();
-#else
-            pthread_mutex_unlock(&this->metaPtr->lock);
-#endif
-
             pthread_rwlock_unlock(&this->metaPtr->rwlock);
             {
 #if __cplusplus > 199711L
