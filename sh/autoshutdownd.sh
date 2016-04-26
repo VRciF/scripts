@@ -5,7 +5,7 @@
 
 ############# CONFIGURATION OPTIONS ###############
 INTERVAL=15  # check interval
-KBPERMIN=50  # kilobyte per minute
+KBPERMIN=350  # kilobyte per minute
 ###################################################
 
 
@@ -18,7 +18,7 @@ PREVOUTKB=-1
 
 while [ true ]; do
 
-    CNTNONSMB=`netstat -t --numeric-hosts | grep -Ev ':ssh[[:space:]]*[[:alpha:]]+' | grep -v microsoft | tail -n +3 | grep -c ''`
+    CNTNONSMB=`netstat -p -t --numeric-hosts | grep -Ev ':ssh[[:space:]]*[[:alpha:]]+' | grep -v microsoft | grep -v rfs | tail -n +3 | grep -c ''`
 
     INKBYTES=0
     OUTKBYTES=0
@@ -29,13 +29,18 @@ while [ true ]; do
 
         KBYTES=`echo $LINE | cut -d : -f 2 | sed 's/^ *//g' | cut -d \  -f 9 | sed 's/...$//'`
         OUTKBYTES=$(($OUTKBYTES + $KBYTES))
-    done < <(cat /proc/net/dev | grep -E 'eth|wlan')
+    done < <(cat /proc/net/dev | grep -v -E 'lo|Inter-|face')
 
     PREVKB=$(($PREVINKB + $PREVOUTKB))
     NOWKB=$(($INKBYTES + $OUTKBYTES))
-    MAXKB=$(($PREVKB + $LIMITKB))
-    if [ $CNTNONSMB -le "0" -a $PREVKB -gt "1" ]; then
-        if [ $NOWKB -ge "$PREVKB" -a $NOWKB -le "$MAXKB" ]; then
+    #MAXKB=$(($PREVKB + $LIMITKB))
+    #if [ $CNTNONSMB -le "0" -a $PREVKB -gt "1" ]; then
+    #    if [ $NOWKB -ge "$PREVKB" -a $NOWKB -le "$MAXKB" ]; then
+    if [ $PREVINKB -gt 0 -a $PREVINKB -le $INKBYTES -a $PREVOUTKB -gt 0 -a $PREVOUTKB -le $OUTKBYTES ]; then
+        DIFFINKB=$(($INKBYTES - $PREVINKB))
+        DIFFOUTKB=$(($OUTKBYTES - $PREVOUTKB))
+        DIFFKB=$(($DIFFINKB + $DIFFOUTKB))
+        if [ $CNTNONSMB -le "0" -a $PREVKB -gt "1" -a $DIFFKB -le $LIMITKB -a $DIFFKB -ge 0 ]; then
             if [ -z "$(pidof rsync)" ]; then
                 shutdown -h now
                 break
