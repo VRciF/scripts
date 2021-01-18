@@ -24,10 +24,10 @@ while [ true ]; do
     OUTKBYTES=0
 
     while read -r LINE; do
-        KBYTES=`echo $LINE | cut -d : -f 2 | sed 's/^ *//g' | cut -d \  -f 1 | sed 's/...$//'`
+        KBYTES=`echo $LINE | cut -d : -f 2 | sed 's/^ *//g' | sed 's/  */ /g' | cut -d ' ' -f 1 | sed 's/...$//'`
         INKBYTES=$(($INKBYTES + $KBYTES))
 
-        KBYTES=`echo $LINE | cut -d : -f 2 | sed 's/^ *//g' | cut -d \  -f 9 | sed 's/...$//'`
+        KBYTES=`echo $LINE | cut -d : -f 2 | sed 's/^ *//g' | sed 's/  */ /g' | cut -d ' ' -f 9 | sed 's/...$//'`
         OUTKBYTES=$(($OUTKBYTES + $KBYTES))
     done < <(cat /proc/net/dev | grep -v -E 'lo|Inter-|face')
 
